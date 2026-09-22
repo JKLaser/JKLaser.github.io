@@ -323,6 +323,12 @@ var SupabaseDB = (function () {
     isLoggedIn: isLoggedIn,
     getSession: getSession,
     clearSession: clearSession,
+    // 仅验证密码（不切换当前会话），返回 true/false
+    verifyPassword: function (username, password) {
+      return requestPasswordSession(username, password).then(function (session) {
+        return !!session;
+      }).catch(function () { return false; });
+    },
 
     // 登录失败次数限制相关
     checkAccountLock: function (username) {
