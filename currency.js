@@ -17,9 +17,9 @@ window.fetchExchangeRate = function() {
       var cachedRate = localStorage.getItem('jk_exchange_rate');
       var cachedDate = localStorage.getItem('jk_exchange_rate_date');
       if (cachedRate && cachedDate) {
-        var age = Date.now() - parseInt(cachedDate);
-        if (age < 2 * 60 * 60 * 1000) { // 2小时
-          window.exchangeRate = parseFloat(cachedRate);
+        var age = Date.now() - Number(cachedDate);
+        if (age >= 0 && age < 2 * 60 * 60 * 1000 && Number.isFinite(Number(cachedRate)) && Number(cachedRate) > 0) {
+          window.exchangeRate = Number(cachedRate);
           console.log('[汇率] 使用缓存汇率:', window.exchangeRate);
           resolve(window.exchangeRate);
           return;
@@ -31,9 +31,9 @@ window.fetchExchangeRate = function() {
     
     // 从 API 获取实时汇率
     fetch('https://api.frankfurter.app/latest?from=CNY&to=USD')
-      .then(function(res) { return res.json(); })
+      .then(function(res) { if (!res.ok) throw new Error('汇率请求失败'); return res.json(); })
       .then(function(data) {
-        if (data && data.rates && data.rates.USD) {
+        if (data && data.rates && typeof data.rates.USD === 'number' && Number.isFinite(data.rates.USD) && data.rates.USD > 0) {
           window.exchangeRate = data.rates.USD;
           window.exchangeRateDate = data.date;
           try {
@@ -100,6 +100,7 @@ window.updateCurrencyLabels = function() {
 window.capNumCNY = function(n) {
   if (isNaN(n) || n === null || n === undefined) return '零元整';
   n = Number(n);
+  if (!Number.isFinite(n) || Math.abs(n) > 90071992547409) return '金额超出有效范围';
   if (n === 0) return '零元整';
 
   var digits = ['零','壹','贰','叁','肆','伍','陆','柒','捌','玖'];
@@ -107,10 +108,11 @@ window.capNumCNY = function(n) {
   var bigUnits = ['','万','亿','万亿'];
 
   var negative = n < 0;
-  n = Math.abs(n);
-  n = Math.round(n * 100) / 100; // 先四舍五入到分，避免 decPart 溢出为 100
-  var intPart = Math.floor(n);
-  var decPart = Math.round((n - intPart) * 100);
+  var parts = String(Math.abs(n)).split('e');
+  var minor = Math.round(Number(parts[0] + 'e' + (Number(parts[1] || 0) + 2)));
+  var intPart = Math.floor(minor / 100);
+  var decPart = minor % 100;
+  if (minor === 0) negative = false;
 
   var intStr = '';
   if (intPart === 0) {
@@ -137,6 +139,7 @@ window.capNumCNY = function(n) {
         }
       }
       if (groupStr !== '') {
+        if (intStr && group < 1000 && !intStr.endsWith('零')) intStr += '零';
         intStr += groupStr + bigUnits[g];
       } else if (intStr !== '' && g > 0) {
         if (!intStr.endsWith('零')) intStr += '零';
@@ -144,6 +147,7 @@ window.capNumCNY = function(n) {
     }
   }
 
+  intStr = intStr.replace(/零+$/, '') || '零';
   var decStr = '';
   if (decPart === 0) {
     decStr = '整';
@@ -164,6 +168,7 @@ window.capNumCNY = function(n) {
 window.capNumUSD = function(n) {
   if (isNaN(n) || n === null || n === undefined) return '零美元整';
   n = Number(n);
+  if (!Number.isFinite(n) || Math.abs(n) > 90071992547409) return '金额超出有效范围';
   if (n === 0) return '零美元整';
 
   var digits = ['零','壹','贰','叁','肆','伍','陆','柒','捌','玖'];
@@ -171,10 +176,11 @@ window.capNumUSD = function(n) {
   var bigUnits = ['','万','亿','万亿'];
 
   var negative = n < 0;
-  n = Math.abs(n);
-  n = Math.round(n * 100) / 100; // 先四舍五入到分，避免 decPart 溢出为 100
-  var intPart = Math.floor(n);
-  var decPart = Math.round((n - intPart) * 100);
+  var parts = String(Math.abs(n)).split('e');
+  var minor = Math.round(Number(parts[0] + 'e' + (Number(parts[1] || 0) + 2)));
+  var intPart = Math.floor(minor / 100);
+  var decPart = minor % 100;
+  if (minor === 0) negative = false;
 
   var intStr = '';
   if (intPart === 0) {
@@ -201,6 +207,7 @@ window.capNumUSD = function(n) {
         }
       }
       if (groupStr !== '') {
+        if (intStr && group < 1000 && !intStr.endsWith('零')) intStr += '零';
         intStr += groupStr + bigUnits[g];
       } else if (intStr !== '' && g > 0) {
         if (!intStr.endsWith('零')) intStr += '零';
@@ -208,6 +215,7 @@ window.capNumUSD = function(n) {
     }
   }
 
+  intStr = intStr.replace(/零+$/, '') || '零';
   var decStr = '';
   if (decPart === 0) {
     decStr = '整';
