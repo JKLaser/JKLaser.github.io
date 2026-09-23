@@ -131,7 +131,7 @@ var SupabaseDB = (function () {
       body: JSON.stringify({ refresh_token: session.refresh_token })
     }).then(function (res) {
       if (!res.ok) {
-        clearSession();
+        if (generation === sessionGeneration) clearSession();
         return res.json().then(function (e) {
           throw new Error(e.msg || '刷新会话失败');
         });
@@ -139,10 +139,13 @@ var SupabaseDB = (function () {
       return res.status === 204 ? null : res.json();
     }).then(function (newSession) {
       if (generation !== sessionGeneration) throw new Error('登录已失效，请重新登录');
-      if (newSession.access_token) {
-        newSession.expires_at = Math.floor(Date.now() / 1000) + (newSession.expires_in || 3600);
-        saveSession(newSession);
+      if (!newSession || typeof newSession.access_token !== 'string' || !newSession.access_token ||
+          !newSession.user || !session.user || newSession.user.id !== session.user.id ||
+          !Number.isFinite(newSession.expires_in) || newSession.expires_in <= 0) {
+        throw new Error('刷新未返回有效会话，请重新登录');
       }
+      newSession.expires_at = Math.floor(Date.now() / 1000) + newSession.expires_in;
+      saveSession(newSession);
       return newSession;
     });
   }
@@ -330,6 +333,12 @@ var SupabaseDB = (function () {
     isLoggedIn: isLoggedIn,
     getSession: getSession,
     clearSession: clearSession,
+    // 仅验证密码（不切换当前会话），返回 true/false
+    verifyPassword: function (username, password) {
+      return requestPasswordSession(username, password).then(function (session) {
+        return !!session;
+      }).catch(function () { return false; });
+    },
 
     // 登录失败次数限制相关
     checkAccountLock: function (username) {
